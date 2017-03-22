@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<!--
+ ||| © 2017.2 (Sol-3) GameGibu
+ ||| Version: 1550
+ ||| URL: https://gist.github.com/anonymous/1061f8ee3c4ef05e81abe9777c6def9e
+-->
+<html>
+  <head>
+    <title>Light Cycles Overlay/Background</title>
+    <meta charset="UTF-8">
+    <meta name="description" content="For use as a visual overlay or screen-filler. This work is primarily for aesthetics.">
+    <meta name="author" content="GameGibu">
+    <meta name="kudos" content="Blaskatronic">
+    <style type="text/css">
+      body, html {
+        background-color: rgba(0,0,0,1);
+        position: relative;
+        overflow: hidden;
+        margin: 0px;
+        height: auto;
+      }
+      #myC {
+        position: fixed;
+        background-color: rgba(0,0,0,0);
+      }
+      #drawer {
+        margin-left: auto;
+        margin-right: auto;
+        position: relative;
+        top: 0px;
+        background-image: linear-gradient(to bottom, #505050, #202020, #202020, #505050);
+        width: 500px;
+        height: 41px;
+        border-width: 0px 1px 1px;
+        border-style: solid;
+        border-color: black;
+        border-top: none;
+        overflow: visible;
+        white-space: nowrap;
+        font-family: "Lucida Console","Courier New",monospace;
+        font-style: normal;
+        font-weight: bold;
+        font-size: 10pt;
+        color: white;
+        opacity: 0.1;
+        margin-top: -30px;
+        border-radius: 0px 0px 5px 5px;
+        transition: margin-top 0.5s, opacity 0.5s;
+      }
+      #drawer:hover {
+        margin-top: 0px;
+        opacity: 1;
+      }
+      #slider {
+        outline: invert solid thick;
+        position: relative;
+        margin-left: 10px;
+        top: 5px;
+        width: 50px;
+      }
+      #LblS_ {
+        display: inline-block;
+        box-sizing: border-box;
+        position: relative;
+        top: -1px;
+        border: 2px #808080 inset;
+        width: 30px;
+        height: 22px;
+        font-size: 12pt;
+        font-weight: bold;
+        padding: 0px;
+        color: #00c000;
+        background-image: linear-gradient(to bottom right, #008000, black);
+        overflow: hidden;
+        vertical-align: middle;
+      }
+      #nBox {
+        display: normal;
+        position: relative;
+        border: 2px #808080 inset;
+        width: 40px;
+        font-size: 12pt;
+        font-weight: bold;
+        padding: 0px;
+        color: #00c000;
+        background-image: linear-gradient(to bottom right, #008000, black);
+        overflow: hidden;
+        -text-align: left;
+      }
+      #cpr {
+        position: absolute;
+        right: 5px;
+        bottom: 0px;
+        color: #808080;
+        font-size: 8pt;
+        text-align: right;
+      }
+      /* Unused
+      @keyframes slide-in {
+        0% {margin-top: -35px;}
+        90% {margin-top: 0px;}
+        100% {margin-top: -3px;}
+      }
+      */
+      
+	  </style>
+  </head>
+  <body>
+    <canvas id="myC" width="100" height="100" onclick="pause();"></canvas>
+    <div id="drawer">
+      <input id="slider" type="range" min="1" max="50" step="1" value="5" oninput="LblS.innerHTML = 'Game speed:' + this.value;" title="Game speed. Default of 5. Lower values yield faster simulation."/>
+      <output id="LblS" for="slider" title="Game speed. Default of 5. Lower values yield faster simulation. Use the slider to adjust it."></output>
+      Players:<input id="nBox" type="number" min="2" max="64" step="1" value="8" title="Number of starting players. Minimum of 2, default of 8, maximum of 64."/>
+      <button onclick="save();" name="sButton" title="Saves the current custom settings.">Save</button>
+      <button onclick="origSettings();" name="dButton" title="Returns to default settings.">Reset</button>
+      <div id="cpr">©2017.2(Sol-3) GameGibu - Version: 1550 [STABLE]</div>
+    </div>
+  </body>
+  <script type="text/javascript">
+    var ctx, playerList, step, loopID, paused, isGameRunning, simSpeed, playerCount, slider, nBpx, win;
+    
+    
+    
+    //class definitions
+    class myColour {
+      constructor(r,g,b,a) {
+        this.r = Math.max(Math.min(r,255),0);
+        this.g = Math.max(Math.min(g,255),0);
+        this.b = Math.max(Math.min(b,255),0);
+        this.a = Math.max(Math.min(a,1),0);
+        this.str = "rgba(" + this.r + ", " + this.g + ", " + this.b + ", " + this.a + ")";
+      }
+      toString() {
+        return this.str;
+      }
+    }
+    class player {
+      constructor(pList, canv, xi, yi, di, colour) {
+        this.p = pList;
+        this.c = canv;
+        this.x = Math.max(Math.min(xi,this.c.canvas.width-2),1);
+        this.y = Math.max(Math.min(yi,this.c.canvas.height-2),1);
+        this.d = Math.max(Math.min(di,3),0);
+        this.colour = colour;
+        this.UID = Math.round(Math.random()*16777216).toString(16);
+      }
+      sense() {
+        if(!isSafe(this.x,this.y)) {
+          return true;
+          dl("Player " + this.UID + " has hit a wall quite squarely.\n\n\n\n\n\n\n\n\n\n...get rekt, skrub.");
+        }
+        /*   deprecated v v v 
+        var see = this.c.getImageData(this.x,this.y,1,1);
+        for(var ii = 0; ii < 3;ii++) {
+          if(see.data[ii] > 0) {
+            
+            return true;
+          }
+        }
+        */// deprecated ^ ^ ^
+        var see;
+        //need to optimize decision curves and constants
+        var chance = 0.01;
+        var power = 1.5;
+        function dev() {return (Math.random()*2-0.5)*5/1000}
+        if(this.d==0) {
+          var obs = safeToNext(this.x+1,this.y,this.d,100);
+          if(obs == -1) {if(randChance(chance+dev())) {this.randTurn();}}
+          else {
+            if(randChance(1/Math.pow(1+obs,power))) {this.randTurn();}
+          }
+        }
+        else if(this.d==1) {
+          var obs = safeToNext(this.x,this.y+1,this.d,100);
+          if(obs == -1) {if(randChance(chance+dev())) {this.randTurn();}}
+          else {
+            if(randChance(1/Math.pow(1+obs,power))) {this.randTurn();}
+          }
+        }
+        else if(this.d==2) {
+          var obs = safeToNext(this.x-1,this.y,this.d,100);
+          if(obs == -1) {if(randChance(chance+dev())) {this.randTurn();}}
+          else {
+            if(randChance(1/Math.pow(1+obs,power))) {this.randTurn();}
+          }
+        }
+        else if(this.d==3) {
+          var obs = safeToNext(this.x,this.y-1,this.d,100);
+          if(obs == -1) {if(randChance(chance+dev())) {this.randTurn();}}
+          else {
+            if(randChance(1/Math.pow(1+obs,power))) {this.randTurn();}
+          }
+        }
+        
+        return false;
+      }
+      randTurn() {if(randChance(0.5)) {this.tryRight(false);} else {this.tryLeft(false);}}
+      tryRight(sec) {
+        if(this.d==0) { dl("Player " + this.UID + ", d=" + this.d + ", sec=" + sec +", is trying to turn right.");
+          if(isSafe(this.x, this.y+1)) {this.turnRight();}
+          else if(!sec) {this.tryLeft(true);}
+        }
+        else if(this.d==1) { dl("Player " + this.UID + ", d=" + this.d + ", sec=" + sec +", is trying to turn right.");
+          if(isSafe(this.x-1, this.y)) {this.turnRight();}
+          else if(!sec) {this.tryLeft(true);}
+        }
+        else if(this.d==2) { dl("Player " + this.UID + ", d=" + this.d + ", sec=" + sec +", is trying to turn right.");
+          if(isSafe(this.x, this.y-1)) {this.turnRight();}
+          else if(!sec) {this.tryLeft(true);}
+        }
+        else if(this.d==3) { dl("Player " + this.UID + ", d=" + this.d + ", sec=" + sec +", is trying to turn right.");
+          if(isSafe(this.x+1, this.y)) {this.turnRight();}
+          else if(!sec) {this.tryLeft(true);}
+        }
+      }
+      tryLeft(sec) {
+        if(this.d==0) { dl("Player " + this.UID + ", d=" + this.d + ", sec=" + sec +", is trying to turn left.");
+          if(isSafe(this.x, this.y-1)) {this.turnLeft();}
+          else if(!sec) {this.tryRight(true);}
+        }
+        else if(this.d==1) { dl("Player " + this.UID + ", d=" + this.d + ", sec=" + sec +", is trying to turn left.");
+          if(isSafe(this.x+1, this.y)) {this.turnLeft();}
+          else if(!sec) {this.tryRight(true);}
+        }
+        else if(this.d==2) { dl("Player " + this.UID + ", d=" + this.d + ", sec=" + sec +", is trying to turn left.");
+          if(isSafe(this.x, this.y+1)) {this.turnLeft();}
+          else if(!sec) {this.tryRight(true);}
+        }
+        else if(this.d==3) { dl("Player " + this.UID + ", d=" + this.d + ", sec=" + sec +", is trying to turn left.");
+          if(isSafe(this.x-1, this.y)) {this.turnLeft();}
+          else if(!sec) {this.tryRight(true);}
+        }
+      }
+      turnLeft() { dl("Player " + this.UID + ", d=" + this.d + " turned left.");
+        this.d--;
+        if(this.d<0) {
+          this.d=3;
+        }
+      }
+      turnRight() { dl("Player " + this.UID + ", d=" + this.d + " turned right.");
+        this.d++;
+        if(this.d>3) {
+          this.d=0;
+        }
+      }
+      move() {
+        switch(this.d) {
+          
+          case 0:
+            this.x++;
+            break;
+          
+          case 1:
+            this.y++;
+            break;
+          
+          case 2:
+            this.x--;
+            break;
+          
+          case 3:
+            this.y--;
+            break;
+          
+          default:
+            this.x++;
+        }
+        
+      }
+      draw() {
+        this.c.fillStyle = this.colour.toString();
+        this.c.fillRect(this.x,this.y,1,1);
+      }
+    }
+    
+    //function definitions
+    function randInt(arg0, arg1) {var out = Math.floor(Math.random() * (arg1 + 1 - arg0)) + arg0; return out;}
+    function randPColour() {return new myColour(randInt(64, 240),randInt(64, 240),randInt(64, 240),1);}
+    function randChance(fraction) {var out = false; fraction = Math.max(fraction,0); out = (fraction>=Math.random()); return out;}
+    function randBool() {return randChance(.5);}
+    function isSafe(x,y) {var dat = ctx.getImageData(x,y,1,1).data; for(a=0;a<4;a++) {if(dat[a]!=0) {return false;}} return true;}
+    function safeToNext(x,y,d,dist) {
+      for(var duh = 0; duh < dist; duh++) {
+        if(!isSafe(x,y)) {
+          return duh;
+        }
+        y += dy(d);
+        x += dx(d);
+      }
+      return dist;
+    }
+    function dy(d) {return Math.round(Math.sin(Math.PI/2*d));}
+    function dx(d) {return Math.round(Math.cos(Math.PI/2*d));}
+    /*deprecated v v v
+    function firstPixel(imgData) {
+      for(var ii=0;ii<imgData.data.length;ii+=4) {
+        if(imgData.data[ii]>0 || imgData.data[ii+1]>0 || imgData.data[ii+2]>0 || imgData.data[ii+3]>0) {
+          return ii/4;
+        }
+        return -1;
+      }
+    }
+    function lastPixel(imgData) {
+      for(var ii=imgData.data.length-4;ii>0;ii+=4) {
+      if(imgData.data[ii]>0 || imgData.data[ii+1]>0 || imgData.data[ii+2]>0 || imgData.data[ii+3]>0) {
+          return (imgData.data.length-4-ii)/4;
+        }
+        return -1;
+      }
+    }
+      deprecated ^ ^ ^ */
+    function clearColour(colour) {
+      var cut = ctx.getImageData(0,0,ctx.canvas.width,ctx.canvas.height);
+      for(var j = 0; j < cut.data.length; j += 4) {
+        if(cut.data[j] == colour.r && cut.data[j+1] == colour.g && cut.data[j+2] == colour.b) {
+          cut.data[j] = 0;
+          cut.data[j+1] = 0;
+          cut.data[j+2] = 0;
+          cut.data[j+3] = 0;
+        }
+      }
+      ctx.putImageData(cut,0,0);
+    }
+    function randPlayer(pl, cv) {return new player(pl, cv, randInt(5,cv.canvas.width-5), randInt(5,cv.canvas.height-5), randInt(0,3), randPColour());}
+    function resizeCanvas() { //LATER maybe keep game live if paused on resize, hard to implement...
+      /*
+      var cut = false;
+      if(isGameRunning && paused) {
+        cut = ctx.getImageData(0,0,ctx.canvas.width,ctx.canvas.height);
+      }
+      */
+      ctx.canvas.width  = window.innerWidth;
+      ctx.canvas.height = window.innerHeight;
+      /*
+      if(cut) {
+        //ctx.drawImage, scale to new
+        //somehow safely scale player positions...?
+      }
+      */
+      if(isGameRunning /* && !paused*/) {stop(true);}
+    }
+    function pause() {
+      paused = !paused;
+      if(paused) {
+        console.log("Game Paused.");
+      }
+      else {
+        console.log("Game Unpaused.");
+      }
+    }
+    function dl(str) {
+      if(paused) {console.log(str);}
+    }
+    function init() {
+      window.startTime = Date.now();
+      console.log("[" + (Date.now() - startTime) + "] Initializing...");
+      ctx = document.getElementById("myC").getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      resizeCanvas();
+      window.onresize = resizeCanvas;
+      paused = false;
+      slider = document.getElementById("slider");
+      nBox = document.getElementById("nBox");
+      LblS = document.getElementById("LblS");
+      slider.addEventListener("input", updateSimSpeed);
+      nBox.addEventListener("change", updatePlayerCount);
+      load();
+      slider.value = simSpeed;
+      LblS.innerHTML = "Game speed:" + simSpeed;
+      nBox.value = playerCount;
+      //window.initialized = true;
+      console.log("[" + (Date.now() - startTime) + "] Initialization Complete.");
+    }
+    function save() {
+      window.localStorage.setItem("simSpeed",simSpeed);
+      window.localStorage.setItem("playerCount",playerCount);
+    }
+    function load() {
+      simSpeed = parseInt(window.localStorage.getItem("simSpeed")) || 5;
+      playerCount = parseInt(window.localStorage.getItem("playerCount")) || 8;
+    }
+    function origSettings() {
+      simSpeed=5;
+      slider.value = simSpeed;
+      LblS.innerHTML = "Game speed:" + simSpeed;
+      playerCount=8;
+      nBox.value = playerCount;
+    }
+    function updateSimSpeed(ev) {
+      simSpeed = parseInt(slider.value, 10);
+    }
+    function updatePlayerCount(ev) {
+      playerCount = parseInt(nBox.value, 10);
+    }
+    function loop() { //make loop contain if !paused stepForward() {rest of current function} to enable coding step during pause
+      if(!paused) {
+        stepForward();
+      }
+    }
+    function stepForward(steps) {
+      if(steps == undefined) {} else {for(var u = 0; u < steps; u++) {stepForward();}}
+      if(step%simSpeed == 0 && !win) {
+        var i;
+        for(i = 0; i < playerList.length; i++) { //breakup move and sense to allow strategy ai (3n not n^3 since no nesting)
+          playerList[i].move();
+        }
+        for(i = 0; i < playerList.length; i++) {
+          var d = playerList[i].sense();
+          if(d) {
+            clearColour(playerList[i].colour);
+            var garb = playerList.splice(i,1);
+            i--;
+            continue;
+          }
+        }
+        for(i = 0; i < playerList.length; i++) {
+          playerList[i].draw();
+        }
+      }
+      //moar timed % stuff maybe
+      
+      if(playerList.length < 2 && !win) {
+        if(playerList[0]) {
+          ctx.fillStyle = playerList[0].colour.toString();
+          ctx.fillRect(1,1,ctx.canvas.width-2,ctx.canvas.height-2);
+          fade = true;
+        }
+        win = true;
+        //stop(true); //move to next loop here v v v
+      }
+      if(win && fade && step%10 == 0) {
+        //frm = ctx.getImageData//WORK
+        var imgarr = ctx.getImageData(1,1,ctx.canvas.width-2,ctx.canvas.height-2);
+        var tot = 0;
+        for(var i = 3;i<imgarr.data.length; i+=4) {
+          if(imgarr.data[i]>0) {tot++;}
+          imgarr.data[i] = Math.max(imgarr.data[i] - 5, 0);
+        }
+        ctx.putImageData(imgarr,1,1);
+        if(tot<=0) {stop(true);}
+      }
+      
+      
+      step++;
+    }
+    function setup(numPlayers) {
+      //improve later, add args to customize player count, etc
+      
+      console.log("[" + (Date.now() - startTime) + "] Attempting to set up game with " + numPlayers + " players.");
+      
+      //clear canvas
+      ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+      
+      
+      //make walls DONE
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(255,255,255,1)"; //new myColour(255,255,255,1).toString();
+      ctx.strokeRect(0,0,ctx.canvas.width,ctx.canvas.height);
+      
+      //make players
+      numPlayers = Math.max(numPlayers,2) || 2;
+      for(var p=0;p<numPlayers;p++) {
+        playerList.push(randPlayer(playerList, ctx));
+      }
+      
+      console.log("[" + (Date.now() - startTime) + "] Successfully set up game with " + playerList.length + " players.");
+      console.groupCollapsed("Players:");
+      var pLObj = new Object();
+      for(var q=0;q<playerList.length;q++) {
+        var temp = new Object();
+        temp.UID = playerList[q].UID;
+        temp.x = playerList[q].x;
+        temp.y = playerList[q].y;
+        temp.d = playerList[q].d;
+        temp.colour = playerList[q].colour.toString();
+        pLObj[playerList[q].UID] = temp;
+      }
+      console.table(pLObj, ["x", "y", "d", "colour"]);
+      console.groupEnd();
+      
+      /* OLD
+      playerList.push(new player(playerList,ctx,100,100,0,randPColour()));
+      playerList.push(new player(playerList,ctx,300,80,1,randPColour()));
+      */
+      
+    }
+    function start() {
+      //try{initialized = initialized} catch(e) {throw "Initialization not complete!!!";}
+      window.clearInterval(loopID);
+      playerList = null;
+      playerList = [];
+      fade = false;
+      win = false;
+      setup(playerCount);
+      simSpeed = simSpeed || 5;
+      step = 0;
+      isGameRunning = true;
+      loopID = window.setInterval(loop, 1);
+      console.log("[" + (Date.now() - startTime) + "] Game Started.");
+    }
+    function stop(restart) {
+      if(!isGameRunning) {console.warn("Game was already stopped!"); return null;}
+      window.clearInterval(loopID);
+      playerList = null;
+      isGameRunning = false;
+      console.log("[" + (Date.now() - startTime) + "] Game Stopped.");
+      if(restart) {console.info("Restarting Game..."); setTimeout(start,1000);}
+    }
+    init();
+    start();
+  </script>
+</html>
